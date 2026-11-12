@@ -1,0 +1,4 @@
+/container-ops
+/config.yaml
+*.env
+.env

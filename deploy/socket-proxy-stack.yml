@@ -1,0 +1,40 @@
+# Read-only Docker API for the dashboard. Deploy once per Swarm cluster:
+#   docker stack deploy -c socket-proxy-stack.yml docker-api
+# It runs on manager nodes only, exposes GET endpoints the dashboard needs,
+# and refuses every POST/DELETE (no create, update, exec or remove).
+#
+# Port 2375 is plain HTTP: allow it only from the dashboard host on the
+# firewall (FortiGate policy or ufw), or put it behind TLS.
+services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      INFO: 1
+      PING: 1
+      VERSION: 1
+      SERVICES: 1   # includes /services/{id}/logs
+      TASKS: 1
+      NODES: 1
+      VOLUMES: 1
+      IMAGES: 0
+      CONTAINERS: 0
+      NETWORKS: 0
+      SECRETS: 0
+      CONFIGS: 0
+      EXEC: 0
+      POST: 0       # read-only
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - target: 2375
+        published: 2375
+        protocol: tcp
+        mode: host
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+      restart_policy: { condition: any }

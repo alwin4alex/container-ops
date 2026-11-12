@@ -1,0 +1,115 @@
+# Copy this file to .github/workflows/deploy-stack.yml in each project repo
+# (the repo that holds docker-compose.yml and .env.example). The dashboard
+# starts it through workflow_dispatch; it can also be run from the GitHub UI.
+#
+# Requirements on each environment's Swarm manager:
+#   - a self-hosted runner with labels: self-hosted, <ENV id> (e.g. DEV, INT, SIT)
+#   - the server .env at $STACK_ROOT/<stack>/.env (not in git)
+#   - `docker login` to Harbor done for the runner user
+# Optional: GitHub environments named like the env ids; add required
+# reviewers on SIT so its deploys wait for approval.
+name: deploy-stack
+run-name: "${{ inputs.action }} ${{ inputs.stack }} → ${{ inputs.environment }} (by ${{ inputs.requested_by || github.actor }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: deploy or teardown
+        type: choice
+        options: [deploy, teardown]
+        required: true
+      environment:
+        description: Environment id (DEV, INT, SIT)
+        type: string
+        required: true
+      stack:
+        description: Swarm stack name
+        type: string
+        required: true
+      requested_by:
+        description: Dashboard user who started the run
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-${{ inputs.stack }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: [self-hosted, "${{ inputs.environment }}"]
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 20
+    env:
+      STACK: ${{ inputs.stack }}
+      STACK_ROOT: ${{ vars.STACK_ROOT || '/opt/stacks' }}
+      COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'docker-compose.yml' }}
+    steps:
+      - name: Validate inputs
+        run: |
+          [[ "$STACK" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$ ]] || { echo "bad stack name"; exit 1; }
+
+      - uses: actions/checkout@v4
+        if: inputs.action == 'deploy'
+
+      - name: Check required env vars against the server .env
+        if: inputs.action == 'deploy'
+        run: |
+          set -euo pipefail
+          envfile="$STACK_ROOT/$STACK/.env"
+          [ -f "$envfile" ] || { echo "::error::$envfile not found on this runner"; exit 1; }
+          fail=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line#export }"; name="${line%%=*}"; name="$(echo "$name" | xargs)"
+            [[ -z "$name" || "$name" == \#* || ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && continue
+            if ! grep -qE "^(export )?${name}=" "$envfile"; then
+              echo "::error::missing $name"; fail=1
+            elif grep -qE "^(export )?${name}=\s*$" "$envfile"; then
+              echo "::warning::empty $name"
+            fi
+          done < .env.example
+          exit $fail
+
+      - name: Deploy stack
+        if: inputs.action == 'deploy'
+        run: |
+          set -euo pipefail
+          set -a; . "$STACK_ROOT/$STACK/.env"; set +a
+          docker stack deploy -c "$COMPOSE_FILE" --with-registry-auth "$STACK"
+
+      - name: Verify replicas
+        if: inputs.action == 'deploy'
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 36); do
+            bad=$(docker service ls --filter "label=com.docker.stack.namespace=$STACK" --format '{{.Name}} {{.Replicas}}' \
+                  | awk '{split($2,a,"/"); if (a[1]!=a[2]) print $1" "$2}')
+            [ -z "$bad" ] && { echo "all services converged"; exit 0; }
+            sleep 5
+          done
+          echo "::error::not converged:"; echo "$bad"; exit 1
+
+      - name: Record run on services
+        if: inputs.action == 'deploy'
+        run: |
+          # Service labels only (not task labels), so this does not restart containers.
+          for s in $(docker service ls --filter "label=com.docker.stack.namespace=$STACK" --format '{{.Name}}'); do
+            docker service update --detach --quiet \
+              --label-add "deploy.run=${{ github.run_number }}" \
+              --label-add "deploy.commit=${GITHUB_SHA::7}" "$s" >/dev/null
+          done
+
+      - name: Tear down stack
+        if: inputs.action == 'teardown'
+        run: |
+          set -euo pipefail
+          docker stack rm "$STACK"
+          for i in $(seq 1 36); do
+            [ -z "$(docker service ls -q --filter "label=com.docker.stack.namespace=$STACK")" ] && { echo "removed"; exit 0; }
+            sleep 5
+          done
+          echo "::error::services still present after 3 minutes"; exit 1

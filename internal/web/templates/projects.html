@@ -1,0 +1,57 @@
+{{define "content"}}{{with .Page}}
+<div class="toolbar">
+  <span class="muted">{{.Summary}}</span>
+  <form class="search" action="/" method="get" role="search">
+    <label>Search
+      <input type="search" name="q" value="{{.Query}}" placeholder="Project or endpoint"
+        hx-get="/" hx-trigger="input changed delay:300ms, search" hx-select="#cards" hx-target="#cards" hx-swap="outerHTML" hx-push-url="true">
+    </label>
+  </form>
+</div>
+{{end}}
+<div id="cards" class="cards" hx-get="{{.Page.SelfURL}}" hx-trigger="every {{.RefreshSeconds}}s" hx-select="#cards" hx-swap="outerHTML">
+{{range .Page.Cards}}
+  <article class="card sev-{{.Sev}}">
+    <div class="card-main">
+      <div class="card-icon {{.Icon}}" aria-hidden="true">{{template "icon-layers" 28}}</div>
+      <div class="card-body">
+        <div class="line">
+          <a class="card-name" href="{{.URL}}">{{.Name}}</a>
+          <span class="chip chip-strong {{.StatusClass}}">{{.Status}}</span>
+          <span class="meta">{{template "icon-activity" 15}}{{.LastSeen}}</span>
+          <span class="meta">{{.Engine}}</span>
+        </div>
+        <div class="line">
+          <span class="meta">Group: <strong>{{.Group}}</strong></span>
+          {{range .Envs}}
+            {{if .Deployed}}<a class="pill" href="{{.URL}}"><span class="dot {{.Dot}}" aria-hidden="true"></span>{{.Label}} · {{.State}} <span class="mono muted">{{.Endpoint}}</span></a>
+            {{else}}<span class="pill pill-off"><span class="dot dot-none" aria-hidden="true"></span>{{.Label}} · Not deployed</span>{{end}}
+          {{end}}
+        </div>
+        <div class="line stats">
+          <span class="stat">{{template "icon-layers" 16}}{{.Stacks}}</span>
+          <span class="stat">{{template "icon-services" 16}}{{.Services}}</span>
+          <span class="stat">{{template "icon-box" 16}}{{.Containers}}
+            <span class="sub-stat ok" title="Running">{{template "icon-power" "Running"}}{{.Running}}</span>
+            <span class="sub-stat bad" title="Stopped">{{template "icon-power" "Stopped"}}{{.Stopped}}</span>
+            <span class="sub-stat ok" title="Healthy">{{template "icon-heart" "Healthy"}}{{.Healthy}}</span>
+            <span class="sub-stat warn" title="Env var issues">{{template "icon-heart" "Env var issues"}}{{.Unhealthy}}</span>
+          </span>
+          <span class="stat">{{template "icon-db" 16}}{{.Volumes}}</span>
+          <span class="stat">{{template "icon-list" 16}}{{.Images}}</span>
+          <span class="stat">{{template "icon-cpu" 16}}{{.CPU}}</span>
+          <span class="stat">{{template "icon-ram" 16}}{{.RAM}}</span>
+          <span class="stat">{{template "icon-server" 16}}{{.Nodes}}</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-actions">
+      <a class="btn btn-primary" href="{{.URL}}">Open containers</a>
+      <a class="btn" href="{{.DeployURL}}">Deploy / tear down</a>
+    </div>
+  </article>
+{{else}}
+  <p class="empty">No project matches the search.</p>
+{{end}}
+</div>
+{{end}}

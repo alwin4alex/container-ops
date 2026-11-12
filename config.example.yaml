@@ -1,0 +1,74 @@
+# Container Ops dashboard configuration.
+# Environments, projects and endpoints are all defined here — nothing is
+# hard-coded in the binary. Secrets can come from env vars or files instead
+# of this file: GITHUB_TOKEN / GITHUB_TOKEN_FILE, HARBOR_PASSWORD /
+# HARBOR_PASSWORD_FILE, SECRET_KEY / SECRET_KEY_FILE.
+
+server:
+  listen: ":8080"
+  refresh_interval: 30s   # how often every endpoint is polled
+  request_timeout: 10s
+  log_tail: 200           # lines per replica shown when the Logs tab opens
+  max_log_streams: 20     # concurrent "Following" log streams
+  secret_key_file: /run/secrets/container_ops_secret   # signs CSRF tokens
+
+auth:
+  # basic  — users below, passwords hashed with: container-ops hash-password
+  # header — trust a reverse proxy (e.g. Caddy forward_auth) to set the user
+  # none   — local development only
+  mode: basic
+  users:
+    - name: alexa
+      role: deployer        # deployer can deploy/tear down; viewer is read-only
+      password_hash: "pbkdf2-sha256$600000$REPLACE$REPLACE"
+  # mode: header
+  # user_header: X-Forwarded-User
+  # role_header: X-Forwarded-Role
+  # default_role: viewer
+  # trusted_proxies: ["10.10.200.10/32"]
+
+github:
+  api_url: https://api.github.com
+  token_file: /run/secrets/github_token   # fine-grained token: Actions read/write, Contents read
+
+harbor:                                   # optional: build date of each running digest
+  url: https://harbor.local
+  username: robot$container-ops
+  password_file: /run/secrets/harbor_password
+  # ca_file: /etc/ssl/harbor-ca.pem
+
+# Order here is the order of tabs and pills in the UI.
+environments:
+  - id: DEV
+    label: Develop
+  - id: INT
+    label: Integration
+  - id: SIT
+    label: SIT
+    require_confirm: true    # type the project id before deploy/teardown
+    require_approval: true   # GitHub environment "SIT" has required reviewers
+
+projects:
+  - id: bss
+    name: BSS
+    group: bss
+    stack: bss                       # docker stack name (com.docker.stack.namespace)
+    repo: your-org/bss-deploy        # holds docker-compose.yml, .env.example, the workflow
+    workflow: deploy-stack.yml
+    ref: main
+    required_env:
+      default: .env.example
+      services:                      # optional per-service lists (service name without stack prefix)
+        transfer: services/transfer/.env.example
+    endpoints:                       # Docker API of a Swarm manager, via the read-only socket proxy
+      DEV: { docker: "http://10.10.200.100:2375", swarm: swarm-dev }
+      INT: { docker: "http://10.10.200.107:2375", swarm: swarm-int }
+      SIT: { docker: "http://10.10.200.114:2375", swarm: swarm-sit }
+
+  - id: tftd
+    name: TFTD
+    stack: tftd
+    repo: your-org/tftd-deploy
+    endpoints:
+      DEV: { docker: "http://10.10.200.120:2375", swarm: swarm-dev }
+      INT: { docker: "http://10.10.200.133:2375", swarm: swarm-int }

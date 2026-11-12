@@ -1,0 +1,46 @@
+# The dashboard itself. Create the config and secrets first:
+#   docker config create container_ops_config_v1 config.yaml
+#   printf '%s' "$GITHUB_TOKEN"   | docker secret create github_token -
+#   printf '%s' "$HARBOR_PASSWORD" | docker secret create harbor_password -
+#   openssl rand -hex 32 | docker secret create container_ops_secret -
+#   docker stack deploy -c dashboard-stack.yml --with-registry-auth container-ops
+#
+# Put it behind Caddy (TLS) — Caddy can also do the sign-in and pass the
+# user in a header (auth.mode: header).
+services:
+  dashboard:
+    image: harbor.local/devops/container-ops:latest   # pin a version tag or digest in practice
+    environment:
+      TZ: Asia/Phnom_Penh
+      CONFIG_FILE: /etc/container-ops/config.yaml
+    configs:
+      - source: container_ops_config
+        target: /etc/container-ops/config.yaml
+    secrets:
+      - github_token
+      - harbor_password
+      - container_ops_secret
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    read_only: true
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+      restart_policy: { condition: any }
+      update_config: { order: start-first, failure_action: rollback }
+    healthcheck:
+      disable: true   # distroless has no shell; Swarm restarts on exit, Caddy can probe /healthz
+
+configs:
+  container_ops_config:
+    name: container_ops_config_v1   # bump the name to roll out a new config
+    external: true
+
+secrets:
+  github_token: { external: true }
+  harbor_password: { external: true }
+  container_ops_secret: { external: true }

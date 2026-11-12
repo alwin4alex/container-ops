@@ -1,0 +1,35 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0}'>
+<title>{{.Title}} · Container Ops</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+<div class="page">
+  <header class="top">
+    <div class="top-title">
+      <h1>Container Ops</h1>
+      <p class="muted">All projects across {{.EnvSummary}} · sources: Docker API (read-only), Harbor, GitHub Actions</p>
+    </div>
+    <div class="top-user">
+      <span class="muted">Auto-refresh {{.RefreshSeconds}}s</span>
+      {{if .User}}<span class="user">{{.User}} <span class="chip {{if .CanDeploy}}chip-info{{else}}chip-neutral{{end}}">{{if .CanDeploy}}deployer{{else}}viewer{{end}}</span></span>{{end}}
+    </div>
+  </header>
+  <nav class="tabs" aria-label="Sections">
+    <a href="/" class="tab{{if eq .Active "projects"}} active{{end}}"{{if eq .Active "projects"}} aria-current="page"{{end}}>Projects</a>
+    <a href="/projects" class="tab{{if eq .Active "containers"}} active{{end}}"{{if eq .Active "containers"}} aria-current="page"{{end}}>Containers</a>
+    <a href="/deploy" class="tab{{if eq .Active "deploy"}} active{{end}}"{{if eq .Active "deploy"}} aria-current="page"{{end}}>Deployments</a>
+  </nav>
+  <main>
+    {{template "content" .}}
+  </main>
+</div>
+<div id="drawer"></div>
+</body>
+</html>{{end}}

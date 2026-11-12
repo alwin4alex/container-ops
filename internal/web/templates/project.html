@@ -1,0 +1,87 @@
+{{define "content"}}{{with .Page}}
+<div class="proj-head">
+  <a class="btn btn-sm" href="/">← All projects</a>
+  <h2>{{.Name}}</h2>
+  <span class="chip chip-strong {{.StatusClass}}">{{.Status}}</span>
+  <span class="muted">{{.Sub}}</span>
+</div>
+<nav class="envtabs" aria-label="Environment">
+  {{range .Tabs}}
+    {{if .Deployed}}
+    <a class="envtab{{if .Active}} active{{end}}" href="{{.URL}}"{{if .Active}} aria-current="page"{{end}}>
+      <span class="envtab-label"><span class="dot {{.Dot}}" aria-hidden="true"></span>{{.Label}}</span>
+      <span class="envtab-sub {{.SubClass}}">{{.Sub}}</span>
+    </a>
+    {{else}}
+    <span class="envtab off" aria-disabled="true">
+      <span class="envtab-label"><span class="dot dot-none" aria-hidden="true"></span>{{.Label}}</span>
+      <span class="envtab-sub muted">{{.Sub}}</span>
+    </span>
+    {{end}}
+  {{end}}
+</nav>
+{{end}}
+<div id="live" hx-get="{{.Page.SelfURL}}" hx-trigger="every {{.RefreshSeconds}}s" hx-select="#live" hx-swap="outerHTML">
+{{with .Page}}
+  <div class="infra">
+    <span>Endpoint <span class="mono strong">{{.Infra.Endpoint}}</span></span>
+    <span>{{.Infra.Swarm}}</span>
+    <span>{{.Infra.Engine}}</span>
+    <span>{{.Infra.Nodes}}</span>
+    <span>{{.Infra.CPU}}</span>
+    <span>{{.Infra.RAM}}</span>
+    <span>{{.Infra.Volumes}}</span>
+    <span>{{.Infra.Images}}</span>
+    <span class="muted">Last check {{.Infra.LastSeen}}</span>
+  </div>
+  {{if .Infra.Down}}<p class="banner banner-bad" role="alert">{{.Infra.DownText}}</p>{{end}}
+  {{if .Infra.NeverPolled}}<p class="banner">Waiting for the first poll of this endpoint…</p>{{end}}
+
+  <section class="kpis" aria-label="Summary">
+    {{range .KPIs}}
+    <a class="kpi{{if .Active}} active{{end}}" href="{{.URL}}"{{if .Active}} aria-current="true"{{end}}>
+      <span class="kpi-label">{{.Label}}</span>
+      <span class="kpi-value {{.ValueClass}}">{{.Value}}</span>
+      <span class="kpi-sub">{{.Sub}}</span>
+    </a>
+    {{end}}
+  </section>
+
+  <section class="panel" aria-label="Services">
+    <div class="panel-head">
+      <h3>{{.Name}} · {{.EnvLabel}}</h3>
+      <div class="chips" role="group" aria-label="Filter services">
+        {{range .Filters}}<a class="chip-btn{{if .Active}} on{{end}}" href="{{.URL}}">{{.Label}} · {{.Count}}</a>{{end}}
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="svc">
+        <thead><tr><th>Service</th><th>Image</th><th>Replicas</th><th>Env vars</th><th>Last deploy</th><th><span class="sr-only">Open</span></th></tr></thead>
+        <tbody>
+        {{range .Rows}}
+          <tr>
+            <td class="bar-{{.Sev}}"><button type="button" class="link-btn" hx-get="{{.DrawerURL}}" hx-target="#drawer">{{.Name}}</button></td>
+            <td>
+              <div class="mono">{{.Image}}</div>
+              <div class="mono small muted" title="{{.Digest}}">{{.DigestShort}}</div>
+              <div class="small muted">{{.Built}}</div>
+            </td>
+            <td><span class="chip {{.HealthClass}}">{{.Replicas}}</span></td>
+            <td><span class="chip {{.EnvClass}}">{{.EnvLabel}}</span></td>
+            <td><span class="chip {{.DeployClass}}">{{.DeployLabel}}</span><div class="small muted">{{.DeployWhen}}</div></td>
+            <td class="nowrap">
+              <button type="button" class="btn btn-xs" hx-get="{{.DrawerURL}}" hx-target="#drawer">Env</button>
+              <button type="button" class="btn btn-xs" hx-get="{{.LogsURL}}" hx-target="#drawer">Logs</button>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td colspan="6" class="empty-row">{{if eq .TotalServices 0}}No services found for this stack.{{else}}No services match this filter.{{end}}</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+    <p class="panel-foot">Env check compares each service with the required-variables list in its repo (.env.example). Values are never read into the dashboard — only present, missing or empty.</p>
+  </section>
+{{end}}
+</div>
+{{end}}

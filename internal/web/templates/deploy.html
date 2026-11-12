@@ -1,0 +1,48 @@
+{{define "content"}}{{with .Page}}
+<section class="panel" aria-label="Deploy or tear down">
+  <div class="panel-head">
+    <h2>Deploy / tear down</h2>
+    <span class="muted">Starts the project's GitHub Actions workflow; the self-hosted runner does the work</span>
+  </div>
+  {{if not .GitHubEnabled}}<p class="banner banner-bad">GitHub token is not configured, so deploy and teardown are disabled.</p>{{end}}
+  {{if not .CanDeploy}}<p class="banner">Your role is viewer. You can see runs but not start them.</p>{{end}}
+  <div class="deploy-form">
+    <div class="field">
+      <span class="field-label">Project</span>
+      <div class="chips" role="group" aria-label="Project">
+        {{range .Projects}}<a class="chip-btn{{if .Selected}} on{{end}}" href="/deploy?project={{.ID}}">{{.Name}}</a>{{end}}
+      </div>
+    </div>
+    <form id="deployform" hx-post="/deploy/confirm" hx-target="#confirm">
+      <input type="hidden" name="project" value="{{.Project.ID}}">
+      <fieldset class="field">
+        <legend class="field-label">Environments</legend>
+        <div class="chips">
+          {{range .Envs}}
+          <label class="check{{if not .Deployed}} check-new{{end}}">
+            <input type="checkbox" name="env" value="{{.ID}}" data-env {{if .Checked}}checked{{end}}>
+            <span>{{.Label}}{{if not .Deployed}} (not deployed){{end}}{{if .RequireApproval}} · approval{{end}}</span>
+          </label>
+          {{end}}
+          <label class="check"><input type="checkbox" data-env-all><span>All</span></label>
+        </div>
+      </fieldset>
+      <label class="field">
+        <span class="field-label">Ref</span>
+        <input class="input mono" type="text" name="ref" value="{{.DefaultRef}}" aria-label="Branch or tag">
+      </label>
+      <div class="actions">
+        <button type="submit" name="action" value="deploy" class="btn btn-primary"{{if or (not .CanDeploy) (not .GitHubEnabled)}} disabled{{end}}>Deploy</button>
+        <button type="submit" name="action" value="teardown" class="btn btn-danger"{{if or (not .CanDeploy) (not .GitHubEnabled)}} disabled{{end}}>Tear down</button>
+      </div>
+    </form>
+  </div>
+  <div id="confirm"></div>
+  <div class="runs-wrap">
+    <h3 class="runs-title">Recent runs · {{.Project.Name}} <span class="muted small">{{.Project.Repo}} · {{.Project.Workflow}}</span></h3>
+    <div id="runs" hx-get="/deploy/runs?project={{.Project.ID}}" hx-trigger="load, every 20s, refreshRuns from:body">
+      <p class="muted small">Loading runs…</p>
+    </div>
+  </div>
+</section>
+{{end}}{{end}}
